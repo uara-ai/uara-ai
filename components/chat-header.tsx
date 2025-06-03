@@ -13,6 +13,7 @@ import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
 import type { Session } from 'next-auth';
+import type { ChatModel } from '@/lib/ai/models';
 
 function PureChatHeader({
   chatId,
@@ -20,20 +21,53 @@ function PureChatHeader({
   selectedVisibilityType,
   isReadonly,
   session,
+  currentModel,
+  onModelChange,
 }: {
   chatId: string;
   selectedModelId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
   session: Session;
+  currentModel?: ChatModel;
+  onModelChange?: (modelId: string) => void;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
-
   const { width: windowWidth } = useWindowSize();
 
+  const getProviderDisplayName = (provider?: string) => {
+    switch (provider) {
+      case 'x':
+        return 'xAI';
+      case 'openai':
+        return 'OpenAI';
+      default:
+        return '';
+    }
+  };
+
+  const getProviderIcon = (provider?: string) => {
+    switch (provider) {
+      case 'x':
+        return '𝕏';
+      case 'openai':
+        return '🤖';
+      default:
+        return '';
+    }
+  };
+
+  const getCapabilityIcons = (model?: ChatModel) => {
+    if (!model) return [];
+    const icons = [];
+    if (model.capabilities.vision) icons.push('👁️');
+    if (model.capabilities.reasoning) icons.push('🧠');
+    return icons;
+  };
+
   return (
-    <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2">
+    <header className="flex sticky top-0 bg-background py-1.5 items-center px-2 md:px-2 gap-2 border-b">
       <SidebarToggle />
 
       {(!open || windowWidth < 768) && (
@@ -56,11 +90,14 @@ function PureChatHeader({
       )}
 
       {!isReadonly && (
-        <ModelSelector
-          session={session}
-          selectedModelId={selectedModelId}
-          className="order-1 md:order-2"
-        />
+        <div className="flex items-center gap-3 order-1 md:order-2">
+          <ModelSelector
+            session={session}
+            selectedModelId={selectedModelId}
+            className="order-1"
+            onModelChange={onModelChange}
+          />
+        </div>
       )}
 
       {!isReadonly && (
@@ -88,5 +125,9 @@ function PureChatHeader({
 }
 
 export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
-  return prevProps.selectedModelId === nextProps.selectedModelId;
+  return (
+    prevProps.selectedModelId === nextProps.selectedModelId &&
+    prevProps.selectedVisibilityType === nextProps.selectedVisibilityType &&
+    prevProps.currentModel?.id === nextProps.currentModel?.id
+  );
 });

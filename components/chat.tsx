@@ -2,7 +2,7 @@
 
 import type { Attachment, UIMessage } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
@@ -20,6 +20,7 @@ import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
 import { ChatSDKError } from '@/lib/errors';
+import { chatModels } from '@/lib/ai/models';
 
 export function Chat({
   id,
@@ -45,6 +46,38 @@ export function Chat({
     initialVisibilityType,
   });
 
+  // Get the current model details and handle dynamic model switching
+  const [currentModelId, setCurrentModelId] = useState(initialChatModel);
+  
+  const currentModel = useMemo(() => 
+    chatModels.find(model => model.id === currentModelId),
+    [currentModelId]
+  );
+
+  // Listen for model changes from cookie updates
+  useEffect(() => {
+    const handleModelChange = () => {
+      // This will be triggered when the model selector updates the cookie
+      const savedModel = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('chat-model='))
+        ?.split('=')[1];
+      
+      if (savedModel && savedModel !== currentModelId) {
+        setCurrentModelId(savedModel);
+      }
+    };
+
+    // Listen for cookie changes
+    window.addEventListener('focus', handleModelChange);
+    const interval = setInterval(handleModelChange, 1000);
+
+    return () => {
+      window.removeEventListener('focus', handleModelChange);
+      clearInterval(interval);
+    };
+  }, [currentModelId]);
+
   const {
     messages,
     setMessages,
@@ -67,8 +100,10 @@ export function Chat({
     experimental_prepareRequestBody: (body) => ({
       id,
       message: body.messages.at(-1),
-      selectedChatModel: initialChatModel,
+      selectedChatModel: currentModelId, // Use current model ID
       selectedVisibilityType: visibilityType,
+      provider: currentModel?.provider,
+      modelCapabilities: currentModel?.capabilities,
     }),
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
@@ -121,10 +156,12 @@ export function Chat({
       <div className="flex flex-col min-w-0 h-dvh bg-background">
         <ChatHeader
           chatId={id}
-          selectedModelId={initialChatModel}
+          selectedModelId={currentModelId}
           selectedVisibilityType={initialVisibilityType}
           isReadonly={isReadonly}
           session={session}
+          currentModel={currentModel}
+          onModelChange={setCurrentModelId}
         />
 
         <Messages
